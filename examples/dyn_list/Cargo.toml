@@ -1,0 +1,15 @@
+[package]
+name = "dyn_list"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4.21"
+shadow-clone = "1.2.1"
+wasm-logger = "0.2.0"
+web-sys = { version = "0.3.69", features = ["HtmlInputElement"] }
+yew = { version = "0.21.0", features = ["csr"] }
+yew-autoprops = "0.4.1"
+yew_data_link = { version = "0.1.0", path = "../.." }
