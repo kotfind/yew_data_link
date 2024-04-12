@@ -37,8 +37,16 @@ where
 
 #[hook]
 pub fn use_bind_link<T: 'static>(link: UseLinkHandle<T>, data: UseDataHandle<T>) {
-    use_effect_with((), move |_| {
+    if !link.is_binded() {
         link.bind(data.clone());
+    }
+
+    use_effect_with((), move |_| {
+        // NOTE: for whatever reason code here
+        // won't run on first render, so
+        // I moved it above.
+        //
+        // link.bind(data.clone());
         move || {
             link.unbind(data);
         }
@@ -142,6 +150,10 @@ impl<T> UseLinkHandle<T> {
 
     pub fn get(&self) -> Option<UseDataHandle<T>> {
         self.inner.deref().borrow().deref().clone()
+    }
+
+    fn is_binded(&self) -> bool {
+        self.inner.deref().borrow().is_some()
     }
 
     fn bind(&self, data_handle: UseDataHandle<T>) {
