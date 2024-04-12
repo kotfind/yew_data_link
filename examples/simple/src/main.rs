@@ -1,11 +1,11 @@
 use shadow_clone::shadow_clone;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
-use yew_data_link::{use_bind_link, use_data, use_link, DataLink};
+use yew_data_link::{use_bind_link, use_data, use_link, UseLinkHandle};
 
 #[autoprops]
 #[function_component]
-fn Counter(link: &DataLink<i64>) -> Html {
+fn Counter(#[prop_or_default] link: &UseLinkHandle<i64>) -> Html {
     let num = use_data(|| 0);
     use_bind_link(link.clone(), num.clone());
 
@@ -39,7 +39,7 @@ fn App() -> Html {
     html! {
         <div>
             <button onclick={on_inc}>{"+"}</button>
-            <Counter link={(*link).clone()} />
+            <Counter link={link} />
             <button onclick={on_dec}>{"-"}</button>
         </div>
     }

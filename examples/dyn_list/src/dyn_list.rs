@@ -1,8 +1,8 @@
+use shadow_clone::shadow_clone;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
-use shadow_clone::shadow_clone;
-use yew_data_link::{use_bind_link, use_data, DataLink};
+use yew_data_link::{use_bind_link, use_data, UseLinkHandle};
 
 pub struct DynListData {
     items: Vec<String>,
@@ -11,7 +11,7 @@ pub struct DynListData {
 impl DynListData {
     fn new() -> Self {
         Self {
-            items: (1..=3).map(|n| format!("Item {n}")).collect()
+            items: (1..=3).map(|n| format!("Item {n}")).collect(),
         }
     }
 
@@ -27,18 +27,18 @@ impl DynListData {
 #[autoprops]
 #[function_component]
 pub fn DynList(
-    #[prop_or_else(DataLink::new)] link: &DataLink<DynListData>,
+    #[prop_or_default] link: &UseLinkHandle<DynListData>,
     #[prop_or(false)] mutable: &bool,
 ) -> Html {
     let data = use_data(DynListData::new);
     use_bind_link(link.clone(), data.clone());
 
     let items = data.apply(|data| data.items.clone());
-    let items = items
-        .iter()
-        .map(|item| html! {
+    let items = items.iter().map(|item| {
+        html! {
             <li>{item}</li>
-        });
+        }
+    });
 
     let input_ref = use_node_ref();
     let onclick = {

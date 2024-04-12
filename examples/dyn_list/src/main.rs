@@ -34,7 +34,7 @@ fn App() -> Html {
     html! {
         <div>
             <h3>{"Mutable list"}</h3>
-            <DynList mutable=true link={(*dyn_list_link).clone()} />
+            <DynList mutable=true link={dyn_list_link} />
             <button onclick={on_clear}>{"Clear"}</button>
             <button onclick={on_print}>{"Print to console"}</button>
 
