@@ -2,7 +2,7 @@ use shadow_clone::shadow_clone;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
-use yew_data_link::{use_bind_link, use_data, UseLinkHandle};
+use yew_data_link::{use_data_link, UseLinkHandle};
 
 pub struct DynListData {
     items: Vec<String>,
@@ -30,10 +30,12 @@ pub fn DynList(
     #[prop_or_default] link: &UseLinkHandle<DynListData>,
     #[prop_or(false)] mutable: &bool,
 ) -> Html {
-    let data = use_data(DynListData::new);
-    use_bind_link(link.clone(), data.clone());
+    let link_ = use_data_link(DynListData::new);
+    link.bind(&link_);
+    let link = link_;
+    let data = link.get().unwrap();
 
-    let items = data.apply(|data| data.items.clone());
+    let items = data.get(|data| data.items.clone());
     let items = items.iter().map(|item| {
         html! {
             <li>{item}</li>
@@ -42,12 +44,12 @@ pub fn DynList(
 
     let input_ref = use_node_ref();
     let onclick = {
-        shadow_clone!(input_ref, data);
+        shadow_clone!(input_ref, link);
         Callback::from(move |_| {
             let input = input_ref.cast::<HtmlInputElement>().unwrap();
             let name = input.value();
             input.set_value("");
-            data.apply_mut(|data| data.items.push(name));
+            link.get().unwrap().apply(|data| data.items.push(name));
         })
     };
 

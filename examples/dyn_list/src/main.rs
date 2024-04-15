@@ -14,7 +14,7 @@ fn App() -> Html {
         shadow_clone!(dyn_list_link);
         Callback::from(move |_| {
             let data = dyn_list_link.get().unwrap();
-            data.apply_mut(|data| data.reset())
+            data.apply(|data| data.reset())
         })
     };
 
@@ -22,7 +22,7 @@ fn App() -> Html {
         shadow_clone!(dyn_list_link);
         Callback::from(move |_| {
             let data = dyn_list_link.get().unwrap();
-            data.apply(|data| {
+            data.get(|data| {
                 log::info!("List items:");
                 for item in data.get() {
                     log::info!("{}", item);

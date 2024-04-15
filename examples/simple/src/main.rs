@@ -1,17 +1,18 @@
 use shadow_clone::shadow_clone;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
-use yew_data_link::{use_bind_link, use_data, use_link, UseLinkHandle};
+use yew_data_link::{use_data_link, use_link, UseLinkHandle};
 
 #[autoprops]
 #[function_component]
 fn Counter(#[prop_or_default] link: &UseLinkHandle<i64>) -> Html {
-    let num = use_data(|| 0);
-    use_bind_link(link.clone(), num.clone());
+    let num_link = use_data_link(|| 0);
+    link.bind(&num_link);
+    let num_data = num_link.get().unwrap();
 
     html! {
         <div>
-            {num.get_cloned()}
+            {num_data.get_cloned()}
         </div>
     }
 }
@@ -24,7 +25,7 @@ fn App() -> Html {
         shadow_clone!(link);
         Callback::from(move |_| {
             let num = link.get().unwrap();
-            num.apply_mut(|num| *num += 1);
+            num.apply(|num| *num += 1);
         })
     };
 
@@ -32,7 +33,7 @@ fn App() -> Html {
         shadow_clone!(link);
         Callback::from(move |_| {
             let num = link.get().unwrap();
-            num.apply_mut(|num| *num -= 1);
+            num.apply(|num| *num -= 1);
         })
     };
 
