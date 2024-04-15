@@ -1,37 +1,11 @@
 use std::{
     cell::RefCell,
-    collections::HashSet,
-    hash::{Hash, Hasher},
-    ops::{Deref, DerefMut},
-    ptr,
+    collections::HashMap,
     rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use yew::{html::ImplicitClone, prelude::*};
-
-#[hook]
-pub fn use_data_link<T, F>(init_fn: F) -> UseLinkHandle<T>
-where
-    T: 'static,
-    F: FnOnce() -> T,
-{
-    let inner = use_mut_ref(|| UseDataHandleInner {
-        value: init_fn(),
-        listeners: HashSet::new(),
-    });
-    let link = use_link::<T>();
-
-    let data = UseDataHandle {
-        inner,
-        parent_link: link.clone(),
-        was_data_read: RefCell::new(false),
-        was_data_wrote: RefCell::new(false),
-    };
-
-    *link.inner.deref().borrow_mut() = Some(data);
-
-    link
-}
 
 #[hook]
 pub fn use_link<T>() -> UseLinkHandle<T>
@@ -39,47 +13,68 @@ where
     T: 'static,
 {
     let inner = use_mut_ref(|| None);
-    let update = Some(use_force_update());
 
-    UseLinkHandle { inner, update }
+    UseLinkHandle(inner)
+}
+
+#[hook]
+pub fn use_create_data<T, F>(init_fn: F) -> UseDataHandle<T>
+where
+    T: 'static,
+    F: FnOnce() -> T,
+{
+    let inner = use_mut_ref(|| UseDataHandleInner {
+        value: init_fn(),
+        listeners: HashMap::new(),
+    });
+
+    use_data_helper(Some(inner)).unwrap()
+}
+
+#[hook]
+pub fn use_link_data<T>(link: UseLinkHandle<T>) -> Option<UseDataHandle<T>>
+where
+    T: 'static,
+{
+    use_data_helper(link.0.borrow().clone())
+}
+
+// Returns Some if inner was Some
+#[hook]
+fn use_data_helper<T>(inner: Option<Rc<RefCell<UseDataHandleInner<T>>>>) -> Option<UseDataHandle<T>>
+where
+    T: 'static,
+{
+    let update = use_force_update();
+
+    static COMP_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let comp_id = *use_mut_ref(|| COMP_ID_COUNTER.fetch_add(1, Ordering::Relaxed)).borrow();
+
+    inner.map(|inner| UseDataHandle {
+        update,
+        inner,
+        comp_id,
+    })
 }
 
 struct UseDataHandleInner<T> {
     value: T,
-    listeners: HashSet<UseLinkHandle<T>>,
+    listeners: HashMap<usize /*comp_id*/, UseForceUpdateHandle>,
 }
 
 pub struct UseDataHandle<T> {
     inner: Rc<RefCell<UseDataHandleInner<T>>>,
-    parent_link: UseLinkHandle<T>,
-    was_data_read: RefCell<bool>,
-    was_data_wrote: RefCell<bool>,
+    update: UseForceUpdateHandle,
+    comp_id: usize,
 }
 
-impl<T> Drop for UseDataHandle<T> {
-    fn drop(&mut self) {
-        let mut borrow = self.inner.deref().borrow_mut();
-        let listeners = &mut borrow.deref_mut().listeners;
-
-        if *self.was_data_read.borrow() {
-            listeners.insert(self.parent_link.clone());
-        } else {
-            // NOTE: breaks because of closures
-            // listeners.remove(&self.parent_link);
+impl<T> Clone for UseDataHandle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Rc::clone(&self.inner),
+            update: self.update.clone(),
+            comp_id: self.comp_id,
         }
-
-        if *self.was_data_wrote.borrow() {
-            for listener in listeners.iter() {
-                listener.update.as_ref().map(|u| u.force_update());
-            }
-        }
-    }
-}
-
-// TODO: delete me
-impl<T> PartialEq for UseDataHandle<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
@@ -88,119 +83,76 @@ impl<T> UseDataHandle<T> {
     where
         F: FnOnce(&T) -> R,
     {
-        *self.was_data_read.borrow_mut() = true;
-        f(&self.inner.deref().borrow().deref().value)
+        self.add_to_listeners();
+        f(&self.inner.borrow().value)
     }
 
     pub fn apply<F, R>(&self, f: F)
     where
         F: FnOnce(&mut T) -> R,
     {
-        *self.was_data_wrote.borrow_mut() = true;
-        f(&mut self.inner.deref().borrow_mut().deref_mut().value);
+        self.update_listeners();
+        f(&mut self.inner.borrow_mut().value);
     }
 
     pub fn apply_get<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
     {
-        *self.was_data_wrote.borrow_mut() = true;
-        *self.was_data_read.borrow_mut() = true;
-        f(&mut self.inner.deref().borrow_mut().deref_mut().value)
+        self.update_listeners();
+        self.add_to_listeners();
+        f(&mut self.inner.borrow_mut().value)
     }
 
-    // NOTE: Do NOT implement actual Clone trait
-    // for UseDataHandle as cloning into closure
-    // would give problems with drop.
-    fn inner_clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-            parent_link: self.parent_link.clone(),
-            was_data_wrote: RefCell::new(false),
-            was_data_read: RefCell::new(false),
+    pub fn link(&self) -> UseLinkHandle<T> {
+        UseLinkHandle(Rc::new(RefCell::new(Some(Rc::clone(&self.inner)))))
+    }
+
+    fn update_listeners(&self) {
+        for listener in self.inner.borrow().listeners.values() {
+            listener.force_update();
         }
+    }
+
+    fn add_to_listeners(&self) {
+        self.inner
+            .borrow_mut()
+            .listeners
+            .insert(self.comp_id, self.update.clone());
     }
 }
 
 impl<T: Clone> UseDataHandle<T> {
     pub fn get_cloned(&self) -> T {
-        *self.was_data_read.borrow_mut() = true;
-        self.inner.deref().borrow().deref().value.clone()
+        self.add_to_listeners();
+        self.inner.borrow().value.clone()
     }
 }
 
-pub struct UseLinkHandle<T> {
-    inner: Rc<RefCell<Option<UseDataHandle<T>>>>,
-    update: Option<UseForceUpdateHandle>, // update = None is returned by Default::default
-}
+pub struct UseLinkHandle<T>(Rc<RefCell<Option<Rc<RefCell<UseDataHandleInner<T>>>>>>);
 
 impl<T> Clone for UseLinkHandle<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-            update: self.update.clone(),
-        }
+        Self(Rc::clone(&self.0))
     }
 }
 
 impl<T> ImplicitClone for UseLinkHandle<T> {}
 
-impl<T> Hash for UseLinkHandle<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        ptr::hash(&*self.inner, state);
-    }
-}
-
 impl<T> PartialEq for UseLinkHandle<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
-
-impl<T> Eq for UseLinkHandle<T> {}
 
 impl<T> Default for UseLinkHandle<T> {
     fn default() -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(None)),
-            update: None,
-        }
+        Self(Rc::new(RefCell::new(None)))
     }
 }
 
 impl<T> UseLinkHandle<T> {
-    pub fn get(&self) -> Option<UseDataHandle<T>> {
-        self.inner
-            .deref()
-            .borrow()
-            .deref()
-            .as_ref()
-            .map(|d| d.inner_clone())
-    }
-
-    pub fn bind(&self, link: &UseLinkHandle<T>) {
-        // NOTE: following code panics on second render
-        // if self.inner.deref().borrow().is_some() {
-        //     panic!(
-        //         "Cannot bind. \
-        //         First link is already binded. \
-        //         Maybe you are binding in the wrong order?"
-        //     );
-        // }
-        let Some(mut data) = link
-            .inner
-            .deref()
-            .borrow()
-            .as_ref()
-            .map(|d| d.inner_clone())
-        else {
-            panic!(
-                "Cannot bind. \
-                Second link doesn't point to any data. \
-                Maybe you are binding in the wrong order?"
-            );
-        };
-        data.parent_link = self.clone();
-        *self.inner.deref().borrow_mut() = Some(data);
+    pub fn bind(&self, data: &UseDataHandle<T>) {
+        *self.0.borrow_mut() = Some(Rc::clone(&data.inner));
     }
 }
