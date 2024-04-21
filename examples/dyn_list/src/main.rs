@@ -9,6 +9,8 @@ mod dyn_list;
 fn App() -> Html {
     let dyn_list_link = use_link::<DynListData>();
 
+    dyn_list_link.msg_on_bind(DynListMsg::Set((1..=3).map(|n| format!("Item {n}")).collect()));
+
     let on_clear = {
         shadow_clone!(dyn_list_link);
         Callback::from(move |_| dyn_list_link.msg(DynListMsg::Clear))

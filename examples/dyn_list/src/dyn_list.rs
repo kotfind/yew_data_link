@@ -12,6 +12,7 @@ pub enum DynListMsg {
     Clear,
     Log,
     Push(String),
+    Set(Vec<String>),
 }
 
 impl MsgData for DynListData {
@@ -19,25 +20,22 @@ impl MsgData for DynListData {
 
     fn msg(&mut self, msg: Self::Msg) {
         match msg {
-            DynListMsg::Clear => {self.items.clear()}
+            DynListMsg::Clear => self.items.clear(),
             DynListMsg::Log => {
                 log::info!("List items:");
                 for item in &self.items {
                     log::info!("{}", item);
                 }
             }
-            DynListMsg::Push(item) => {
-                self.items.push(item)
-            },
+            DynListMsg::Push(item) => self.items.push(item),
+            DynListMsg::Set(items) => self.items = items,
         };
     }
 }
 
 impl DynListData {
     fn new() -> Self {
-        Self {
-            items: (1..=3).map(|n| format!("Item {n}")).collect(),
-        }
+        Self { items: Vec::new() }
     }
 }
 
