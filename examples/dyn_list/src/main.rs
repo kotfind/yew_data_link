@@ -1,5 +1,4 @@
-use crate::dyn_list::DynList;
-use dyn_list::DynListData;
+use dyn_list::{DynList, DynListData, DynListMsg};
 use shadow_clone::shadow_clone;
 use yew::prelude::*;
 use yew_data_link::use_link;
@@ -12,23 +11,12 @@ fn App() -> Html {
 
     let on_clear = {
         shadow_clone!(dyn_list_link);
-        Callback::from(move |_| {
-            let data = dyn_list_link.get().unwrap();
-            data.apply_mut(|data| data.reset())
-        })
+        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Clear).unwrap())
     };
 
     let on_print = {
         shadow_clone!(dyn_list_link);
-        Callback::from(move |_| {
-            let data = dyn_list_link.get().unwrap();
-            data.apply(|data| {
-                log::info!("List items:");
-                for item in data.get() {
-                    log::info!("{}", item);
-                }
-            });
-        })
+        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Log).unwrap())
     };
 
     html! {

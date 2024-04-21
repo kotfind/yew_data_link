@@ -1,6 +1,5 @@
 use std::{
-    cell::RefCell,
-    ops::{Deref, DerefMut},
+    cell::{Ref, RefCell},
     rc::Rc,
 };
 
@@ -12,13 +11,13 @@ where
     T: 'static,
     F: FnOnce() -> T,
 {
+    let update = use_force_update();
     let inner = use_mut_ref(|| UseDataHandleInner {
         value: init_fn(),
-        links: Vec::new(),
+        update,
     });
-    let update = use_force_update();
 
-    UseDataHandle { inner, update }
+    UseDataHandle(inner)
 }
 
 #[hook]
@@ -27,90 +26,57 @@ where
     T: 'static,
 {
     let inner = use_mut_ref(|| None);
-    let update = use_force_update();
 
-    UseLinkHandle {
-        inner,
-        update: Some(update),
-    }
+    UseLinkHandle(inner)
 }
 
 #[hook]
 pub fn use_bind_link<T: 'static>(link: UseLinkHandle<T>, data: UseDataHandle<T>) {
+    link.bind(data.clone());
     use_effect_with((), move |_| {
-        link.bind(data.clone());
         move || {
-            link.unbind(data);
+            link.unbind();
         }
     });
 }
 
-struct UseDataHandleInner<T> {
-    value: T,
-    links: Vec<UseLinkHandle<T>>,
+pub trait MsgData {
+    type Msg;
+
+    fn msg(&mut self, msg: Self::Msg);
 }
 
-pub struct UseDataHandle<T> {
-    inner: Rc<RefCell<UseDataHandleInner<T>>>,
+struct UseDataHandleInner<T> {
+    value: T,
     update: UseForceUpdateHandle,
 }
 
+pub struct UseDataHandle<T>(Rc<RefCell<UseDataHandleInner<T>>>);
+
 impl<T> Clone for UseDataHandle<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-            update: self.update.clone(),
-        }
+        Self(Rc::clone(&self.0))
+    }
+}
+
+impl<T: MsgData> UseDataHandle<T> {
+    pub fn msg(&self, msg: <T as MsgData>::Msg) {
+        self.0.borrow_mut().value.msg(msg);
+        self.0.borrow().update.force_update();
     }
 }
 
 impl<T> UseDataHandle<T> {
-    pub fn apply<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&T) -> R,
-    {
-        f(&self.inner.deref().borrow().deref().value)
-    }
-
-    pub fn apply_mut<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut T) -> R,
-    {
-        let ret = f(&mut self.inner.deref().borrow_mut().deref_mut().value);
-
-        self.update.force_update();
-        for link in &self.inner.deref().borrow().links {
-            let Some(ref update) = link.update else {
-                panic!("dummy UseLinkHandles should not be added to UseDataHandle::links");
-            };
-            update.force_update();
-        }
-
-        ret
+    pub fn current(&self) -> Ref<T> {
+        Ref::map(self.0.borrow(), |v| &v.value)
     }
 }
 
-impl<T: Clone> UseDataHandle<T> {
-    pub fn get_cloned(&self) -> T {
-        self.inner.deref().borrow().deref().value.clone()
-    }
-}
-
-// UseLinkHandles may be dummy.
-// Dummy link still hold a refference to data, though
-// update is not triggered, when data changes.
-// Dummy links are used to create optional properties (#[prop_or_default])
-pub struct UseLinkHandle<T> {
-    inner: Rc<RefCell<Option<UseDataHandle<T>>>>,
-    update: Option<UseForceUpdateHandle>, // is None for dummy links
-}
+pub struct UseLinkHandle<T>(Rc<RefCell<Option<UseDataHandle<T>>>>);
 
 impl<T> Clone for UseLinkHandle<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-            update: self.update.clone(),
-        }
+        Self(Rc::clone(&self.0))
     }
 }
 
@@ -118,53 +84,34 @@ impl<T> ImplicitClone for UseLinkHandle<T> {}
 
 impl<T> PartialEq for UseLinkHandle<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
 impl<T> Default for UseLinkHandle<T> {
     fn default() -> Self {
-        UseLinkHandle::<T>::dummy()
+        Self(Rc::new(RefCell::new(None)))
+    }
+}
+
+impl<T: MsgData> UseLinkHandle<T> {
+    pub fn msg(&self, msg: <T as MsgData>::Msg) -> Result<(), ()> {
+        self.0
+            .borrow()
+            .as_ref()
+            .map(|v| {
+                v.msg(msg);
+            })
+            .ok_or(())
     }
 }
 
 impl<T> UseLinkHandle<T> {
-    pub fn dummy() -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(None)),
-            update: None,
-        }
-    }
-
-    pub fn is_dummy(&self) -> bool {
-        self.update.is_none()
-    }
-
-    pub fn get(&self) -> Option<UseDataHandle<T>> {
-        self.inner.deref().borrow().deref().clone()
-    }
-
     fn bind(&self, data_handle: UseDataHandle<T>) {
-        *self.inner.deref().borrow_mut() = Some(data_handle.clone());
-        if !self.is_dummy() {
-            data_handle
-                .inner
-                .deref()
-                .borrow_mut()
-                .links
-                .push(self.clone());
-        }
+        *self.0.borrow_mut() = Some(data_handle.clone());
     }
 
-    fn unbind(&self, data_handle: UseDataHandle<T>) {
-        *self.inner.deref().borrow_mut() = None;
-        if !self.is_dummy() {
-            data_handle
-                .inner
-                .deref()
-                .borrow_mut()
-                .links
-                .retain(|link| link != self);
-        }
+    fn unbind(&self) {
+        *self.0.borrow_mut() = None;
     }
 }
