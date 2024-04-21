@@ -1,11 +1,24 @@
 use std::{
-    cell::RefCell,
-    collections::HashMap,
+    cell::{Ref, RefCell},
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use yew::{html::ImplicitClone, prelude::*};
+
+#[hook]
+pub fn use_data<T, F>(init_fn: F) -> UseDataHandle<T>
+where
+    T: 'static,
+    F: FnOnce() -> T,
+{
+    let update = use_force_update();
+    let inner = use_mut_ref(|| UseDataHandleInner {
+        value: init_fn(),
+        update,
+    });
+
+    UseDataHandle(inner)
+}
 
 #[hook]
 pub fn use_link<T>() -> UseLinkHandle<T>
@@ -18,118 +31,48 @@ where
 }
 
 #[hook]
-pub fn use_create_data<T, F>(init_fn: F) -> UseDataHandle<T>
-where
-    T: 'static,
-    F: FnOnce() -> T,
-{
-    let inner = use_mut_ref(|| UseDataHandleInner {
-        value: init_fn(),
-        listeners: HashMap::new(),
+pub fn use_bind_link<T: 'static>(link: UseLinkHandle<T>, data: UseDataHandle<T>) {
+    link.bind(data.clone());
+    use_effect_with((), move |_| {
+        move || {
+            link.unbind();
+        }
     });
-
-    use_data_helper(Some(inner)).unwrap()
 }
 
-#[hook]
-pub fn use_link_data<T>(link: UseLinkHandle<T>) -> Option<UseDataHandle<T>>
-where
-    T: 'static,
-{
-    use_data_helper(link.0.borrow().clone())
-}
+pub trait MsgData {
+    type Msg;
 
-// Returns Some if inner was Some
-#[hook]
-fn use_data_helper<T>(inner: Option<Rc<RefCell<UseDataHandleInner<T>>>>) -> Option<UseDataHandle<T>>
-where
-    T: 'static,
-{
-    let update = use_force_update();
-
-    static COMP_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let comp_id = *use_mut_ref(|| COMP_ID_COUNTER.fetch_add(1, Ordering::Relaxed)).borrow();
-
-    inner.map(|inner| UseDataHandle {
-        update,
-        inner,
-        comp_id,
-    })
+    fn msg(&mut self, msg: Self::Msg);
 }
 
 struct UseDataHandleInner<T> {
     value: T,
-    listeners: HashMap<usize /*comp_id*/, UseForceUpdateHandle>,
+    update: UseForceUpdateHandle,
 }
 
-pub struct UseDataHandle<T> {
-    inner: Rc<RefCell<UseDataHandleInner<T>>>,
-    update: UseForceUpdateHandle,
-    comp_id: usize,
-}
+pub struct UseDataHandle<T>(Rc<RefCell<UseDataHandleInner<T>>>);
 
 impl<T> Clone for UseDataHandle<T> {
     fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-            update: self.update.clone(),
-            comp_id: self.comp_id,
-        }
+        Self(Rc::clone(&self.0))
+    }
+}
+
+impl<T: MsgData> UseDataHandle<T> {
+    pub fn msg(&self, msg: <T as MsgData>::Msg) {
+        self.0.borrow_mut().value.msg(msg);
+        self.0.borrow().update.force_update();
     }
 }
 
 impl<T> UseDataHandle<T> {
-    pub fn get<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&T) -> R,
-    {
-        self.add_to_listeners();
-        f(&self.inner.borrow().value)
-    }
-
-    pub fn apply<F, R>(&self, f: F)
-    where
-        F: FnOnce(&mut T) -> R,
-    {
-        self.update_listeners();
-        f(&mut self.inner.borrow_mut().value);
-    }
-
-    pub fn apply_get<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(&mut T) -> R,
-    {
-        self.update_listeners();
-        self.add_to_listeners();
-        f(&mut self.inner.borrow_mut().value)
-    }
-
-    pub fn link(&self) -> UseLinkHandle<T> {
-        UseLinkHandle(Rc::new(RefCell::new(Some(Rc::clone(&self.inner)))))
-    }
-
-    fn update_listeners(&self) {
-        for listener in self.inner.borrow().listeners.values() {
-            listener.force_update();
-        }
-    }
-
-    fn add_to_listeners(&self) {
-        self.inner
-            .borrow_mut()
-            .listeners
-            .insert(self.comp_id, self.update.clone());
+    pub fn current(&self) -> Ref<T> {
+        Ref::map(self.0.borrow(), |v| &v.value)
     }
 }
 
-impl<T: Clone> UseDataHandle<T> {
-    pub fn get_cloned(&self) -> T {
-        self.add_to_listeners();
-        self.inner.borrow().value.clone()
-    }
-}
-
-pub struct UseLinkHandle<T>(Rc<RefCell<Option<Rc<RefCell<UseDataHandleInner<T>>>>>>);
+pub struct UseLinkHandle<T>(Rc<RefCell<Option<UseDataHandle<T>>>>);
 
 impl<T> Clone for UseLinkHandle<T> {
     fn clone(&self) -> Self {
@@ -151,8 +94,24 @@ impl<T> Default for UseLinkHandle<T> {
     }
 }
 
+impl<T: MsgData> UseLinkHandle<T> {
+    pub fn msg(&self, msg: <T as MsgData>::Msg) -> Result<(), ()> {
+        self.0
+            .borrow()
+            .as_ref()
+            .map(|v| {
+                v.msg(msg);
+            })
+            .ok_or(())
+    }
+}
+
 impl<T> UseLinkHandle<T> {
-    pub fn bind(&self, data: &UseDataHandle<T>) {
-        *self.0.borrow_mut() = Some(Rc::clone(&data.inner));
+    fn bind(&self, data_handle: UseDataHandle<T>) {
+        *self.0.borrow_mut() = Some(data_handle.clone());
+    }
+
+    fn unbind(&self) {
+        *self.0.borrow_mut() = None;
     }
 }

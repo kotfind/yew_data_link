@@ -2,10 +2,35 @@ use shadow_clone::shadow_clone;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
-use yew_data_link::{use_data_link, UseLinkHandle};
+use yew_data_link::{use_bind_link, use_data, MsgData, UseLinkHandle};
 
 pub struct DynListData {
     items: Vec<String>,
+}
+
+pub enum DynListMsg {
+    Clear,
+    Log,
+    Push(String),
+}
+
+impl MsgData for DynListData {
+    type Msg = DynListMsg;
+
+    fn msg(&mut self, msg: Self::Msg) {
+        match msg {
+            DynListMsg::Clear => {self.items.clear()}
+            DynListMsg::Log => {
+                log::info!("List items:");
+                for item in &self.items {
+                    log::info!("{}", item);
+                }
+            }
+            DynListMsg::Push(item) => {
+                self.items.push(item)
+            },
+        };
+    }
 }
 
 impl DynListData {
@@ -13,14 +38,6 @@ impl DynListData {
         Self {
             items: (1..=3).map(|n| format!("Item {n}")).collect(),
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.items.clear();
-    }
-
-    pub fn get(&self) -> Vec<String> {
-        self.items.clone()
     }
 }
 
@@ -30,12 +47,10 @@ pub fn DynList(
     #[prop_or_default] link: &UseLinkHandle<DynListData>,
     #[prop_or(false)] mutable: &bool,
 ) -> Html {
-    let link_ = use_data_link(DynListData::new);
-    link.bind(&link_);
-    let link = link_;
-    let data = link.get().unwrap();
+    let data = use_data(DynListData::new);
+    use_bind_link(link.clone(), data.clone());
 
-    let items = data.get(|data| data.items.clone());
+    let items = &data.current().items;
     let items = items.iter().map(|item| {
         html! {
             <li>{item}</li>
@@ -44,12 +59,12 @@ pub fn DynList(
 
     let input_ref = use_node_ref();
     let onclick = {
-        shadow_clone!(input_ref, link);
+        shadow_clone!(input_ref, data);
         Callback::from(move |_| {
             let input = input_ref.cast::<HtmlInputElement>().unwrap();
             let name = input.value();
             input.set_value("");
-            link.get().unwrap().apply(|data| data.items.push(name));
+            data.msg(DynListMsg::Push(name));
         })
     };
 

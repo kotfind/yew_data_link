@@ -9,4 +9,4 @@ edition = "2021"
 shadow-clone = "1.2.1"
 yew = { version = "0.21.0", features = ["csr"] }
 yew-autoprops = "0.4.1"
-yew_data_link = { version = "0.1.0", path = "../.." }
+yew_data_link = { path = "../.." }

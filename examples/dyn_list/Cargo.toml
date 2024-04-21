@@ -12,4 +12,4 @@ wasm-logger = "0.2.0"
 web-sys = { version = "0.3.69", features = ["HtmlInputElement"] }
 yew = { version = "0.21.0", features = ["csr"] }
 yew-autoprops = "0.4.1"
-yew_data_link = { version = "0.1.0", path = "../.." }
+yew_data_link = { path = "../.." }
