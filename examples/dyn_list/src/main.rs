@@ -11,12 +11,12 @@ fn App() -> Html {
 
     let on_clear = {
         shadow_clone!(dyn_list_link);
-        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Clear).unwrap())
+        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Clear))
     };
 
     let on_print = {
         shadow_clone!(dyn_list_link);
-        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Log).unwrap())
+        Callback::from(move |_| dyn_list_link.msg(DynListMsg::Log))
     };
 
     html! {

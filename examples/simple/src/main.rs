@@ -40,12 +40,12 @@ fn App() -> Html {
 
     let on_inc = {
         shadow_clone!(link);
-        Callback::from(move |_| link.msg(NumMsg::Inc).unwrap())
+        Callback::from(move |_| link.msg(NumMsg::Inc))
     };
 
     let on_dec = {
         shadow_clone!(link);
-        Callback::from(move |_| link.msg(NumMsg::Dec).unwrap())
+        Callback::from(move |_| link.msg(NumMsg::Dec))
     };
 
     html! {

@@ -95,18 +95,20 @@ impl<T> Default for UseLinkHandle<T> {
 }
 
 impl<T: MsgData> UseLinkHandle<T> {
-    pub fn msg(&self, msg: <T as MsgData>::Msg) -> Result<(), ()> {
-        self.0
-            .borrow()
-            .as_ref()
-            .map(|v| {
-                v.msg(msg);
-            })
-            .ok_or(())
+    pub fn try_msg(&self, msg: <T as MsgData>::Msg) -> Result<(), ()> {
+        self.0.borrow().as_ref().map(|v| v.msg(msg)).ok_or(())
+    }
+
+    pub fn msg(&self, msg: <T as MsgData>::Msg) {
+        self.try_msg(msg).unwrap()
     }
 }
 
 impl<T> UseLinkHandle<T> {
+    pub fn is_binded(&self) -> bool {
+        self.0.borrow().is_some()
+    }
+
     fn bind(&self, data_handle: UseDataHandle<T>) {
         *self.0.borrow_mut() = Some(data_handle.clone());
     }
