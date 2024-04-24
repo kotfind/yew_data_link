@@ -74,7 +74,7 @@ impl<T> UseDataHandle<T> {
     }
 }
 
-pub struct UseLinkHandleInner<T: MsgData> {
+struct UseLinkHandleInner<T: MsgData> {
     data_handle: Option<UseDataHandle<T>>,
     msgs_on_bind: Vec<<T as MsgData>::Msg>,
 }
