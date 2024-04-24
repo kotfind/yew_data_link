@@ -1,10 +1,11 @@
-workspace = { members = [ "examples/dyn_list","examples/simple" ] }
+workspace = { members = [ "examples/dyn_list", "examples/simple" ] }
+
 [package]
 name = "yew_data_link"
-version = "0.2.2"
+description = "This crate allows one to mutate yew function component’s data from other component via sending messages."
+repository = "https://github.com/kotfind/yew_data_link"
+version = "0.2.3"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 yew = "0.21.0"

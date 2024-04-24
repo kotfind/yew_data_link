@@ -15,6 +15,8 @@
 //! ```rust
 #![doc = include_str!("../examples/simple/src/main.rs")]
 //! ```
+//!
+//! Check examples folder for more.
 
 use std::{
     cell::{Ref, RefCell},

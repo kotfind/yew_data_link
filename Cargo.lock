@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "yew_data_link"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "yew",
 ]
