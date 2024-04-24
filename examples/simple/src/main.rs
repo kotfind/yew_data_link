@@ -1,4 +1,3 @@
-use shadow_clone::shadow_clone;
 use yew::prelude::*;
 use yew_autoprops::autoprops;
 use yew_data_link::{use_bind_link, use_data, use_link, MsgData, UseLinkHandle};
@@ -28,9 +27,7 @@ fn Counter(#[prop_or_default] link: &UseLinkHandle<Num>) -> Html {
     use_bind_link(link.clone(), num.clone());
 
     html! {
-        <div>
-            {num.current().0}
-        </div>
+        <div>{num.current().0}</div>
     }
 }
 
@@ -38,21 +35,19 @@ fn Counter(#[prop_or_default] link: &UseLinkHandle<Num>) -> Html {
 fn App() -> Html {
     let link = use_link();
 
-    let on_inc = {
-        shadow_clone!(link);
-        Callback::from(move |_| link.msg(NumMsg::Inc))
-    };
-
-    let on_dec = {
-        shadow_clone!(link);
-        Callback::from(move |_| link.msg(NumMsg::Dec))
-    };
-
     html! {
         <div>
-            <button onclick={on_inc}>{"+"}</button>
-            <Counter link={link} />
-            <button onclick={on_dec}>{"-"}</button>
+            <button onclick={
+                let link = link.clone();
+                move |_| link.msg(NumMsg::Inc)
+            }>{"+"}</button>
+
+            <Counter link={link.clone()} />
+
+            <button onclick={
+                let link = link.clone();
+                move |_| link.msg(NumMsg::Dec)
+            }>{"-"}</button>
         </div>
     }
 }

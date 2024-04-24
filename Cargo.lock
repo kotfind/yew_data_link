@@ -911,7 +911,6 @@ checksum = "99e3d62f6165d200916d9918a3ff1f4a28b9e2492a241b2e514961a395fe4adf"
 name = "simple"
 version = "0.1.0"
 dependencies = [
- "shadow-clone",
  "yew",
  "yew-autoprops",
  "yew_data_link",
