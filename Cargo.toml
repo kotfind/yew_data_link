@@ -4,6 +4,7 @@ workspace = { members = [ "examples/dyn_list", "examples/simple" ] }
 name = "yew_data_link"
 description = "This crate allows one to mutate yew function component’s data from other component via sending messages."
 repository = "https://github.com/kotfind/yew_data_link"
+license = "MIT"
 version = "0.2.3"
 edition = "2021"
 
